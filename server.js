@@ -14,7 +14,8 @@ const NodeCache = require('node-cache');
 require('dotenv').config();
 
 const app = express();
-const PORT = 3000;
+// Use the port assigned by Render, or 3000 for local development
+const PORT = process.env.PORT || 3000;
 const cache = new NodeCache({ stdTTL: 300 }); // Cache for 5 mins
 
 // Initialize Groq
@@ -168,5 +169,6 @@ app.post('/api/chat-agent', async (req, res) => {
         res.json({ reply: reply?.explanation || "System busy." });
     } catch (e) { res.status(500).json({ reply: "Error." }); }
 });
+
 
 app.listen(PORT, () => console.log(`🚀 NEPAL GUARD LIVE: http://localhost:${PORT}`));
