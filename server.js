@@ -1,7 +1,7 @@
 /**
  * 🛡️ TRUTH-GUARD AI: 2026 ELITE EDITION
  * ---------------------------------------
- * TARGET: r/newsnepal289 (Strict)
+ * TARGET: r/nepal360 (Strict)
  * MODEL: Llama 3.3 70B (Via Groq)
  * PROTECTION: Rate-Limit Queue & Auto-Retry
  */
@@ -157,4 +157,5 @@ app.post('/api/chat-agent', async (req, res) => {
 
 
 app.listen(PORT, () => console.log(`🚀 NEPAL GUARD LIVE: http://localhost:${PORT}`));
+
 
