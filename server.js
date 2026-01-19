@@ -78,24 +78,38 @@ async function getVerifiedContext(headline) {
     } catch (e) { return "SEARCH_FAILED"; }
 }
 
-// --- MAIN ENDPOINT ---
 app.get('/api/verify-news', async (req, res) => {
     try {
-        const TARGET_SUB = 'newsnepal289';
-        console.log(`📡 Connecting to r/${TARGET_SUB}...`);
+        // Try the specific sub first, then a fallback if it fails
+        const targetSubs = ['newsnepal289', 'nepalnews', 'nepalsocial'];
+        let rawPosts = [];
+        let subUsed = "";
 
-        // 1. Fetch from Reddit (Strict User-Agent to avoid blocking)
-        let redditRes;
-        try {
-            redditRes = await axios.get(`https://www.reddit.com/r/${TARGET_SUB}/hot.json?limit=10`, {
-                headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)' }
-            });
-        } catch (e) {
-            return res.status(404).json({ error: `r/${TARGET_SUB} not found or private.` });
+        for (const sub of targetSubs) {
+            try {
+                console.log(`📡 Attempting to connect to r/${sub}...`);
+                const redditRes = await axios.get(`https://www.reddit.com/r/${sub}/hot.json?limit=10`, {
+                    headers: { 
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+                        'Accept': 'application/json'
+                    }
+                });
+                
+                if (redditRes.data.data.children.length > 0) {
+                    rawPosts = redditRes.data.data.children;
+                    subUsed = sub;
+                    break; // Found working data, exit loop
+                }
+            } catch (e) {
+                console.log(`⚠️ Could not reach r/${sub}: ${e.message}`);
+            }
         }
 
-        const rawPosts = redditRes.data.data.children;
-        if (!rawPosts.length) return res.json([]);
+        if (rawPosts.length === 0) {
+            return res.status(404).json({ error: "Could not retrieve data from any target subreddits." });
+        }
+
+        console.log(`✅ Successfully pulled data from r/${subUsed}`);
 
         // Filter valid posts
         const posts = rawPosts
@@ -104,51 +118,21 @@ app.get('/api/verify-news', async (req, res) => {
 
         const results = [];
 
-        // 2. PROCESS QUEUE (One by One to save Rate Limits)
+        // PROCESS QUEUE
         for (const post of posts) {
             console.log(`🔍 Analyzing: "${post.title.substring(0, 15)}..."`);
-            
-            // Step A: Get Context
             const context = await getVerifiedContext(post.title);
             
-            // Step B: AI Analysis
             const messages = [
-                {
-                    role: "system",
-                    content: "You are a Nepali News Verification AI. Output JSON only."
-                },
-                {
-                    role: "user",
-                    content: `
-                    ANALYZE CLAIM: "${post.title}"
-                    VERIFIED CONTEXT: "${context}"
-
-                    RULES:
-                    1. If CONTEXT is "NO_MATCHING_SOURCES", likely "Unverified" or "Fake".
-                    2. Detect Propaganda (Nationalist bait, Fear mongering).
-                    3. Score Truth (0-100) and Propaganda (0-100).
-
-                    RETURN JSON:
-                    {
-                      "verdict": "Real" | "Fake" | "Misleading" | "Unverified",
-                      "truthScore": 0-100,
-                      "propaganda_score": 0-100,
-                      "category": "Politics" | "Social" | "Economy",
-                      "explanation": "Short reason.",
-                      "news_type": "Reddit"
-                    }
-                    `
-                }
+                { role: "system", content: "You are a Nepali News Verification AI. Output JSON only." },
+                { role: "user", content: `ANALYZE CLAIM: "${post.title}"\nCONTEXT: "${context}"...` }
             ];
 
             const analysis = await generateSafe(messages);
-            
             if (analysis) {
-                results.push({ claim: post.title, url: post.url, ...analysis });
+                results.push({ claim: post.title, url: post.url, ...analysis, source_sub: subUsed });
             }
-
-            // CRITICAL: Throttle request to 1 per second for Groq Free Tier
-            await sleep(1200);
+            await sleep(1200); 
         }
 
         res.json(results);
@@ -158,6 +142,7 @@ app.get('/api/verify-news', async (req, res) => {
         res.status(500).json([]);
     }
 });
+        
 
 // Chat Agent
 app.post('/api/chat-agent', async (req, res) => {
@@ -172,3 +157,4 @@ app.post('/api/chat-agent', async (req, res) => {
 
 
 app.listen(PORT, () => console.log(`🚀 NEPAL GUARD LIVE: http://localhost:${PORT}`));
+
